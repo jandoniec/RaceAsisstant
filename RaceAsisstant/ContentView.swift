@@ -12,9 +12,19 @@ struct ContentView: View {
                                 .environmentObject(locationManager)) {
                     Text("Mark Starting Line Position")
                 }
+                .font(.headline)
+                .frame(width: 200, height: 60)
+                .background(Color(.systemGray4))
+                .cornerRadius(10)
+                .foregroundColor(.black)
                 NavigationLink(destination: RaceSettingsView()) {
                     Text("Race Settings")
-                }
+                }   .font(.headline)
+                    .frame(width: 200, height: 60)
+                    .background(Color(.systemGray4))
+                    .cornerRadius(10)
+                    .foregroundColor(.black)
+                
             }
             .padding()
         }

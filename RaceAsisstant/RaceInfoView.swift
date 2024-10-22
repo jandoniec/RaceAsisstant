@@ -5,15 +5,29 @@ import CoreLocation
 struct RaceInfoView: View {
     var startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D)
     @EnvironmentObject var locationManager: LocationManager
-    @State private var countdown: TimeInterval = 300 // Domyślnie 5 minut
+    @State private var countdown: TimeInterval
     @State private var timerRunning: Bool = false
     @State private var timer: Timer?
+    public init(startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D)) {
+        self.startLineCoordinates = startLineCoordinates
+        _countdown = State(initialValue: LocationManager.shared.timerDuration)
+
+    }
+    
 
     var body: some View {
         VStack(spacing: 20) {
             if let currentLocation = locationManager.currentLocation {
-                Text("SOG: \(locationManager.speed, specifier: "%.2f") knots")
-                Text("COG: \(locationManager.course, specifier: "%.2f")°")
+                if locationManager.speed > 0{
+                    Text("SOG: \(locationManager.speed, specifier: "%.2f") knots")}
+                else{
+                    Text("SOG: 0 knots")}
+                if locationManager.course >= 0{
+                    Text("COG: \(locationManager.course, specifier: "%.2f")°")
+                }
+                else{
+                    Text("COG: waiting for GPS data")
+                }
                 Text("Distance to Start Line: \(calculateDistanceToStartLine(from: currentLocation), specifier: "%.2f") meters")
                 Text("Time to Start Line: \(calculateTimeToStartLine(from: currentLocation), specifier: "%.2f") seconds")
 
@@ -27,6 +41,7 @@ struct RaceInfoView: View {
 
             if !timerRunning {
                 Button("Start Timer") {
+                    countdown = locationManager.timerDuration
                     startTimer()
                 }
                 .font(.headline)

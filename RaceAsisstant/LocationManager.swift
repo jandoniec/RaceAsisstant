@@ -8,6 +8,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var currentLocation: CLLocationCoordinate2D?
     @Published var speed: CLLocationSpeed = 0.0
     @Published var course: CLLocationDirection = 0.0
+    @Published var timerDuration: TimeInterval = 300 // Domyślnie 5 minut
 
     override init() {
         super.init()

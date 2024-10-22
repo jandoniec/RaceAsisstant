@@ -3,6 +3,8 @@ struct RaceSettingsView: View {
     @State private var timerMinutes: Int = 5
     @State private var timerSeconds: Int = 0
     @State private var showPicker: Bool = false
+    @EnvironmentObject var locationManager: LocationManager
+
 
     var body: some View {
         VStack(spacing: 20) {
@@ -46,6 +48,8 @@ struct RaceSettingsView: View {
 
                     Button("Done") {
                         showPicker.toggle()
+                        locationManager.timerDuration = TimeInterval(timerMinutes * 60 + timerSeconds)
+
                     }
                     .font(.headline)
                     .frame(width: 200, height: 60)
