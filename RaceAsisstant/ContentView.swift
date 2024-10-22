@@ -1,24 +1,24 @@
-//
-//  ContentView.swift
-//  RaceAsisstant
-//
-//  Created by Jan Doniec on 22/10/2024.
-//
-
 import SwiftUI
+import CoreLocation
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @StateObject private var locationManager = LocationManager.shared
+    @State private var startLineCoordinates = (rcBoat: CLLocationCoordinate2D(), pin: CLLocationCoordinate2D())
 
-#Preview {
-    ContentView()
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                NavigationLink(destination: MarkStartLineView(startLineCoordinates: $startLineCoordinates)
+                                .environmentObject(locationManager)) {
+                    Text("Mark Starting Line Position")
+                }
+                NavigationLink(destination: RaceSettingsView()) {
+                    Text("Race Settings")
+                }
+            }
+            .padding()
+        }
+
+        .environmentObject(locationManager) // Przekazanie environmentObject
+    }
 }
