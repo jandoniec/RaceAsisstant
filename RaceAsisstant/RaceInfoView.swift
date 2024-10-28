@@ -1,81 +1,87 @@
 import SwiftUI
 import CoreLocation
 
-
 struct RaceInfoView: View {
     var startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D)
-    @EnvironmentObject var locationManager: LocationManager
-    @State private var countdown: TimeInterval
+    @ObservedObject var locationManager: LocationManager
     @State private var timerRunning: Bool = false
-    @State private var timer: Timer?
-    public init(startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D)) {
-        self.startLineCoordinates = startLineCoordinates
-        _countdown = State(initialValue: LocationManager.shared.timerDuration)
+    @State private var cachedLocation: CLLocationCoordinate2D?
+    @State private var cachedSpeed: CLLocationSpeed = 0.0
+    @State private var cachedCourse: CLLocationDirection = 0.0
+    @State private var countdown: TimeInterval
+    @State private var isOnFalseStart: Bool = false
+    @State private var timer: Timer?  // Timer reference
+    @State private var pausedTime: TimeInterval? // To store time remaining when paused
 
+    init(startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D), locationManager: LocationManager) {
+        self.startLineCoordinates = startLineCoordinates
+        self.locationManager = locationManager
+        _countdown = State(initialValue: locationManager.timerSetting)
     }
-    
 
     var body: some View {
         VStack(spacing: 20) {
-            if let currentLocation = locationManager.currentLocation {
-                if locationManager.speed > 0{
-                    Text("SOG: \(locationManager.speed, specifier: "%.2f") knots")}
-                else{
-                    Text("SOG: 0 knots")}
-                if locationManager.course >= 0{
-                    Text("COG: \(locationManager.course, specifier: "%.2f")°")
-                }
-                else{
-                    Text("COG: waiting for GPS data")
-                }
-                Text("Distance to Start Line: \(calculateDistanceToStartLine(from: currentLocation), specifier: "%.2f") meters")
-                Text("Time to Start Line: \(calculateTimeToStartLine(from: currentLocation), specifier: "%.2f") seconds")
+            // Wybór obrazka na podstawie stanu
+            Image(getStartLineImageName())
+                .resizable()
+                .aspectRatio(contentMode: .fit) // Zachowanie proporcji
+                .frame(width: 200)              // Ustaw tylko szerokość
+                .padding()
 
+            if let location = cachedLocation {
+                Text("SOG: \(cachedSpeed > 0 ? String(format: "%.2f knots", cachedSpeed) : "0 knots")")
+                Text("COG: \(cachedCourse >= 0 ? String(format: "%.2f°", cachedCourse) : "waiting for GPS data")")
+                Text("Distance to Start Line: \(String(format: "%.2f meters", calculateDistanceToStartLine(from: location)))")
+                Text("Time to Start Line: \(String(format: "%.2f seconds", calculateTimeToStartLine(from: location)))")
+                
+                if locationManager.isFalseStartDetectorEnabled {
+                    Text(isOnFalseStart ? "False Start!" : "All Clear")
+                        .foregroundColor(isOnFalseStart ? .red : .green)
+                }
             } else {
                 Text("Location data not available")
             }
-
             Text("Timer: \(formatTime(countdown))")
                 .font(.largeTitle)
                 .padding()
 
-            if !timerRunning {
-                Button("Start Timer") {
-                    countdown = locationManager.timerDuration
-                    startTimer()
-                }
-                .font(.headline)
-                .frame(width: 200, height: 60)
-                .background(Color.green)
-                .cornerRadius(10)
-                .foregroundColor(.white)
-            } else {
-                Button("Stop Timer") {
-                    stopTimer()
-                }
-                .font(.headline)
-                .frame(width: 200, height: 60)
-                .background(Color.red)
-                .cornerRadius(10)
-                .foregroundColor(.white)
-            }
-
-            if !timerRunning && countdown < 300 {
-                HStack(spacing: 20) {
-                    Button("Resume Timer") {
+            HStack(spacing: 20) {
+                if !timerRunning && pausedTime == nil {
+                    // Jeśli timer nie jest uruchomiony i nie jest zatrzymany, wyświetl "Start"
+                    Button("Start") {
                         startTimer()
                     }
                     .font(.headline)
-                    .frame(width: 150, height: 50)
-                    .background(Color.blue)
+                    .frame(width: 100, height: 50)
+                    .background(Color.green)
                     .cornerRadius(10)
                     .foregroundColor(.white)
-
-                    Button("Reset Timer") {
+                } else if timerRunning {
+                    // Jeśli timer jest uruchomiony, wyświetl "Stop"
+                    Button("Stop") {
+                        stopTimer()
+                    }
+                    .font(.headline)
+                    .frame(width: 100, height: 50)
+                    .background(Color.red)
+                    .cornerRadius(10)
+                    .foregroundColor(.white)
+                } else if !timerRunning && pausedTime != nil {
+                    // Jeśli timer jest zatrzymany, wyświetl "Resume" i "Reset"
+                    Button("Resume") {
+                        resumeTimer()
+                    }
+                    .font(.headline)
+                    .frame(width: 100, height: 50)
+                    .background(Color.orange)
+                    .cornerRadius(10)
+                    .foregroundColor(.white)
+                    
+                    Button("Reset") {
                         resetTimer()
                     }
                     .font(.headline)
-                    .frame(width: 150, height: 50)
+                    .frame(width: 100, height: 50)
                     .background(Color.gray)
                     .cornerRadius(10)
                     .foregroundColor(.white)
@@ -85,6 +91,18 @@ struct RaceInfoView: View {
         .padding()
         .onAppear {
             locationManager.startUpdatingLocation()
+            fetchAndCacheData()
+            startDataFetchTimer()
+            checkForFalseStart()
+        }
+    }
+
+    // Funkcja, która wybiera odpowiednią wersję obrazka linii startu
+    private func getStartLineImageName() -> String {
+        if locationManager.isFalseStartDetectorEnabled {
+            return isOnFalseStart ? "StartLine_Red" : "StartLine_Clear"
+        } else {
+            return "StartLine_Default"
         }
     }
 
@@ -100,20 +118,71 @@ struct RaceInfoView: View {
     }
 
     private func stopTimer() {
-        timerRunning = false
         timer?.invalidate()
         timer = nil
+        timerRunning = false
+        pausedTime = countdown // Zapisz pozostały czas, aby można było go wznowić
+    }
+
+    private func resumeTimer() {
+        guard let remainingTime = pausedTime else { return }
+        countdown = remainingTime
+        pausedTime = nil
+        startTimer()
     }
 
     private func resetTimer() {
-        stopTimer()
-        countdown = 300 // Reset do 5 minut
+        timer?.invalidate()
+        timer = nil
+        timerRunning = false
+        countdown = locationManager.timerSetting
+        pausedTime = nil
+    }
+
+    private func checkForFalseStart() {
+        guard locationManager.isFalseStartDetectorEnabled, let firstMark = locationManager.getFirstTurningMark(), let yachtLocation = cachedLocation else { return }
+        isOnFalseStart = isPointInsideTriangle(p: yachtLocation, a: startLineCoordinates.rcBoat, b: startLineCoordinates.pin, c: firstMark)
+    }
+    private func fetchAndCacheData() {
+        let data = locationManager.fetchCurrentData()
+        cachedLocation = data.location
+        cachedSpeed = data.speed
+        cachedCourse = data.course
+    }
+
+    private func startDataFetchTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            fetchAndCacheData()
+        }
+    }
+
+    private func stopDataFetchTimer() {
+        timer?.invalidate()
+        timer = nil
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    // Funkcja pomocnicza do obliczenia obszaru trójkąta utworzonego przez trzy punkty
+    func area(_ p1: CLLocationCoordinate2D, _ p2: CLLocationCoordinate2D, _ p3: CLLocationCoordinate2D) -> Double {
+        return abs((p1.latitude * (p2.longitude - p3.longitude) +
+                    p2.latitude * (p3.longitude - p1.longitude) +
+                    p3.latitude * (p1.longitude - p2.longitude)) / 2.0)
+    }
+
+    // Funkcja sprawdzająca, czy punkt leży wewnątrz trójkąta
+    func isPointInsideTriangle(p: CLLocationCoordinate2D, a: CLLocationCoordinate2D, b: CLLocationCoordinate2D, c: CLLocationCoordinate2D) -> Bool {
+        let totalArea = area(a, b, c)
+        let area1 = area(p, b, c)
+        let area2 = area(a, p, c)
+        let area3 = area(a, b, p)
+        
+        // Jeśli suma pól trójkątów utworzonych z punktami równa się całkowitemu obszarowi, punkt jest wewnątrz trójkąta
+        return abs(totalArea - (area1 + area2 + area3)) < 1e-5
     }
 
     private func calculateDistanceToStartLine(from currentLocation: CLLocationCoordinate2D) -> CLLocationDistance {
@@ -124,13 +193,10 @@ struct RaceInfoView: View {
                                       longitude: (rcBoatLocation.coordinate.longitude + pinLocation.coordinate.longitude) / 2)
         return currentCLLocation.distance(from: lineMidpoint)
     }
-    
     private func calculateTimeToStartLine(from currentLocation: CLLocationCoordinate2D) -> Double {
         let distance = calculateDistanceToStartLine(from: currentLocation)
-        let speedInMetersPerSecond = locationManager.speed * 0.514444 // Konwersja węzłów na m/s
+        let speedInMetersPerSecond = cachedSpeed * 0.514444
         guard speedInMetersPerSecond > 0 else { return Double.infinity }
         return distance / speedInMetersPerSecond
     }
 }
-
-

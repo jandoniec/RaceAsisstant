@@ -3,9 +3,10 @@ import CoreLocation
 
 struct MarkStartLineView: View {
     @Binding var startLineCoordinates: (rcBoat: CLLocationCoordinate2D, pin: CLLocationCoordinate2D)
-    @EnvironmentObject var locationManager: LocationManager
     @State private var rcLocationMessage: String = ""
     @State private var pinLocationMessage: String = ""
+
+      @ObservedObject var locationManager: LocationManager  // Zmiana z EnvironmentObject na ObservedObject
 
     var body: some View {
         VStack(spacing: 20) {
@@ -45,11 +46,13 @@ struct MarkStartLineView: View {
             .cornerRadius(10)
             .foregroundColor(.black)
 
-            NavigationLink(destination: RaceInfoView(startLineCoordinates: startLineCoordinates)
-                            .environmentObject(locationManager)) {
+            NavigationLink(destination: RaceInfoView(
+                startLineCoordinates: startLineCoordinates,
+                locationManager: locationManager
+            )) {
                 Text("Done")
             }
-            .font(.headline)
+                            .font(.headline)
             .frame(width: 200, height: 60)
             .background(Color(.systemGray4))
             .cornerRadius(10)
