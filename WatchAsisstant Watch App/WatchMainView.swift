@@ -19,6 +19,8 @@ struct WatchMainView: View {
     @State private var firstTurningMark: CLLocationCoordinate2D?
     @State private var isFalseStartEnabled = false
     @State private var marks: [CLLocationCoordinate2D] = [] // Tablica na znaki
+    @StateObject private var workoutManager = WorkoutManager()
+
 
     var body: some View {
         TabView {
@@ -51,6 +53,12 @@ struct WatchMainView: View {
             )
             .tabItem {
                 Label("Race Info", systemImage: "flag")
+            }
+            .onAppear {
+                workoutManager.startWorkout() // Automatyczne rozpoczęcie sesji treningowej
+            }
+            .onDisappear {
+                workoutManager.endWorkout() // Automatyczne zakończenie sesji, gdy aplikacja zostanie zamknięta
             }
         }
     }

@@ -21,9 +21,27 @@ struct RaceInfoView: View {
             Text("Timer: \(formatTime(remainingTime))")
                 .font(.headline)
 
-            // Wyświetlanie prędkości
-            Text("Speed: \(String(format: "%.2f", locationManager.currentSpeed / 0.51444)) knots")
+            // Wyświetlanie prędkości w węzłach (tylko dodatnie wartości)
+            let positiveSpeed = max(locationManager.currentSpeed, 0) / 0.51444
+            Text("Speed: \(String(format: "%.2f", positiveSpeed)) knots")
                 .font(.headline)
+
+            // Wyświetlanie COG (tylko dodatnie wartości)
+            let positiveCOG = max(locationManager.currentCourse, 0)
+            Text("COG: \(String(format: "%.2f", positiveCOG))°")
+                .font(.headline)
+
+            // Wyświetlanie odległości do linii startowej
+            if let distance = calculateDistanceToLine() {
+                Text("Distance to Line: \(String(format: "%.2f", distance)) m")
+                    .font(.headline)
+            }
+
+            // Wyświetlanie czasu do linii startowej
+            if let timeToLine = calculateTimeToLine() {
+                Text("Time to Line: \(String(format: "%.1f", timeToLine)) s")
+                    .font(.headline)
+            }
 
             // Wyświetlanie falstartu
             if isFalseStartEnabled && checkForFalseStart() {
@@ -63,6 +81,30 @@ struct RaceInfoView: View {
             b: pin,
             c: firstMark
         )
+    }
+
+    func calculateDistanceToLine() -> CLLocationDistance? {
+        guard let rc = rcPosition, let pin = pinPosition, let currentLocation = locationManager.currentLocation else {
+            return nil
+        }
+        
+        // Obliczamy punkt środkowy linii startowej
+        let startLineMidpoint = CLLocation(
+            latitude: (pin.latitude + rc.latitude) / 2,
+            longitude: (pin.longitude + rc.longitude) / 2
+        )
+        
+        // Obliczamy odległość do linii startowej
+        return currentLocation.distance(from: startLineMidpoint)
+    }
+
+    func calculateTimeToLine() -> TimeInterval? {
+        guard let distance = calculateDistanceToLine(), locationManager.currentSpeed > 0 else {
+            return nil
+        }
+        
+        // Obliczamy czas do linii (odległość/prędkość)
+        return distance / locationManager.currentSpeed
     }
 
     func isPointInTriangle(p: CLLocationCoordinate2D, a: CLLocationCoordinate2D, b: CLLocationCoordinate2D, c: CLLocationCoordinate2D) -> Bool {

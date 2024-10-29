@@ -8,6 +8,7 @@
 
 import SwiftUI
 import CoreLocation
+import Foundation
 
 struct AddMarksView: View {
     @ObservedObject var locationManager: LocationManager
@@ -17,7 +18,7 @@ struct AddMarksView: View {
     var body: some View {
         VStack {
             if let currentLocation = locationManager.currentLocation {
-                Text("Current Location: \(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)")
+                Text("Current Location: \(formatCoordinate(currentLocation.coordinate.latitude, isLatitude: true)), \(formatCoordinate(currentLocation.coordinate.longitude, isLatitude: false))")
                     .font(.headline)
 
                 Button("Add Mark") {
@@ -29,7 +30,7 @@ struct AddMarksView: View {
                         firstTurningMark = currentLocation.coordinate
                     }
                 } else {
-                    Text("First Turning Mark: \(firstTurningMark!.latitude), \(firstTurningMark!.longitude)")
+                    Text("First Turning Mark: \(formatCoordinate(firstTurningMark!.latitude, isLatitude: true)), \(formatCoordinate(firstTurningMark!.longitude, isLatitude: false))")
                 }
             } else {
                 Text("Waiting for GPS...")
@@ -46,4 +47,19 @@ struct AddMarksView: View {
     func addMark(at coordinate: CLLocationCoordinate2D) {
         marks.append(coordinate)
     }
+    func formatCoordinate(_ coordinate: CLLocationDegrees, isLatitude: Bool) -> String {
+        let degrees = Int(coordinate)
+        let minutes = Int((coordinate - Double(degrees)) * 60)
+        let seconds = Int((((coordinate - Double(degrees)) * 60) - Double(minutes)) * 60)
+        
+        let direction: String
+        if isLatitude {
+            direction = coordinate >= 0 ? "N" : "S"
+        } else {
+            direction = coordinate >= 0 ? "E" : "W"
+        }
+
+        return "\(abs(degrees))° \(abs(minutes))' \(abs(seconds))\" \(direction)"
+    }
+
 }
